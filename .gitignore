@@ -3,4 +3,7 @@
 __pycache__/ 
 __pycache__/ 
 .torch_cache/
+*.env
 .env
+*.pyc
+
