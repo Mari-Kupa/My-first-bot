@@ -42,7 +42,7 @@ def start(message):
     bot.send_message(
         message.chat.id,
         text=(
-            "👋 Привет! Я мультимодальный бот 🤖\n\n"
+            "👋 Привет! Я твой умный бот 🤖\n\n"
             "Вот что я умею:\n"
             "🎨 Генерировать изображения\n"
             "📄 Пересказывать файлы\n"
@@ -85,9 +85,19 @@ def handle_image(message):
 
 
     api = Painter()
-    model_id = api.get_model()
-    u = api.generate(message.text, model_id)
-    images = api.check_generation(u)
+    try:
+        model_id = api.get_model()
+    except:
+        bot.send_message(chat_id, "Извините, бот временно недоступен.")
+    try:
+        u = api.generate(message.text, model_id)
+    except:
+        bot.send_message(chat_id, "Извините, бот временно недоступен.")
+    try:
+        images = api.check_generation(u)
+    except:
+        bot.send_message(chat_id, "Извините, бот временно недоступен.")
+
 
     if images == 'CENSORED':
         bot.send_message(chat_id, 'Изображение содержало в себе то, что может оскорбить других или нарушает законы РФ')
