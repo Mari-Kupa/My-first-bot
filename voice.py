@@ -44,6 +44,9 @@ def get_audio(path):
     # Получаем ответ от GPT
     reply = gpt_request(text)
     print('ответ от GPT')
+    MAX_LEN = 1000
+    if len(reply) > MAX_LEN:
+        reply = reply[:MAX_LEN]
 
     # Синтезируем речь
     model_id = 'v4_ru'

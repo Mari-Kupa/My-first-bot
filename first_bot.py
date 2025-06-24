@@ -56,33 +56,18 @@ def start(message):
 
 @bot.message_handler(func=lambda message: message.text == "🎨 Создать изображение")
 def image_button(message):
-    print('я тут')
     chat_id = message.chat.id
     bot.send_message(chat_id, 'Отправьте описание изображения для генерации:')
-
     bot.register_next_step_handler(message, handle_image)
 
 def handle_image(message):
     chat_id = message.chat.id
 
-    # настройка redis
-    r = redis.Redis(host='localhost', port=6379)
-    try:
-        print(r.ping())  # Должно вывести True
-    except redis.ConnectionError:
-        print("Ошибка подключения к Redis")
+    estimated_time = random.randint(30, 60)  # имитация времени генерации
 
-    # настройка времени
-    start_time = round(time.time())
-    if r.get('gen_sec') == None:
-        r.set('gen_sec', 50)
-
-    prev_time = int(r.get('gen_sec').decode('UTF-8'))
-    prev_time = random.randint(prev_time - 10, prev_time + 10)
-
-    bot.send_message(chat_id, f"Работаю над вашей иллюстрацией, это может занять ~{prev_time} сек")
+    bot.send_message(chat_id, f"Работаю над вашей иллюстрацией, это может занять ~{estimated_time} сек")
     bot.send_chat_action(chat_id, action='upload_photo')
-
+    start_time = time.time()
 
     api = Painter()
     try:
@@ -98,16 +83,14 @@ def handle_image(message):
     except:
         bot.send_message(chat_id, "Извините, бот временно недоступен.")
 
+    end_time = time.time()
+    gen_sec = int(end_time - start_time)
 
     if images == 'CENSORED':
         bot.send_message(chat_id, 'Изображение содержало в себе то, что может оскорбить других или нарушает законы РФ')
     else:
         uniq_id = str(uuid.uuid4())
         image_path = f'images/{uniq_id}.png'
-
-        end_time = round(time.time())
-        gen_sec = end_time - start_time
-        r.set('gen_sec', gen_sec)
 
         with open(image_path, 'wb') as fpng:
             fpng.write(base64.b64decode(images[0]))
@@ -189,9 +172,6 @@ def stop_chat(message):
     chat_id = message.chat.id
     user_mode.pop(chat_id, None)
     bot.send_message(chat_id, "Нажмите /start, чтобы выбрать действие.")
-
-
-
 
 print('Бот заработал!')
 
