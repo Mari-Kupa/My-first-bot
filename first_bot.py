@@ -11,6 +11,7 @@ import time
 from voice import get_audio
 import os
 from pathlib import Path
+from telebot import types
 
 
 bot = telebot.TeleBot(TOKEN)
@@ -19,36 +20,83 @@ telebot.apihelper.RETRY_ON_HTTP_ERROR = True # Пытаться повторит
 telebot.apihelper.READ_TIMEOUT = 90         # Увеличить таймаут чтения до 90 секунд (по умолчанию 25)
 telebot.apihelper.CONNECT_TIMEOUT = 90      # Увеличить таймаут соединения до 90 секунд (по умолчанию 25)
 
-fact_database = [
-    'Первый в мире ИИ-программа, написанная в 1951 году, называлась "Нейронная сеть" и была создана для игры в шашки.',
-    'В 2018 году картина, созданная ИИ, была продана на аукционе за 432 500 долларов, что вызвало большой интерес к роли ИИ в творчестве.',
-    'По прогнозам, к 2025 году более 80% взаимодействий с клиентами будут осуществляться с помощью чат-ботов и ИИ-систем'
-]
-# --- Обработчики команд ---
-@bot.message_handler(commands=['fact'])
-def fact(message):
-    text = random.choice(fact_database)
-    bot.send_message(message.chat.id, text)
+user_mode = {}
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    text = 'Я могу рассказывать <b>интересные факты</b>. Пришлите мне /fact для этого'
-    bot.send_message(message.chat.id, text, parse_mode='html')
+    # Создаём кнопки
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-@bot.message_handler(commands=['help'])
-def help(message):
-    text = 'У бота одна рабочая команда /fact, с помощью нее вы можете получить интересный фатк'
-    bot.reply_to(message, text)
+    btn1 = types.KeyboardButton("🎨 Создать изображение")
+    btn2 = types.KeyboardButton("📄 Пересказать файл")
+    btn3 = types.KeyboardButton("🎙 Спросить голосом")
+    btn4 = types.KeyboardButton("🤖 Просто поговорить")
 
-# --- Функция say_hi ДОЛЖНА БЫТЬ ЗДЕСЬ (перед /hi)! ---
-def say_hi(message):
-    name = message.text
-    bot.send_message(message.chat.id, f'Привет {name}!')
+    # Добавляем кнопки в меню
+    markup.add(btn1, btn2)
+    markup.add(btn3, btn4)
 
-@bot.message_handler(commands=['hi'])
-def hi(message):
-    name = bot.send_message(message.chat.id, 'Как тебя зовут?')
-    bot.register_next_step_handler(name, say_hi)
+
+    # Отправляем приветствие с меню
+    bot.send_message(
+        message.chat.id,
+        text=(
+            "👋 Привет! Я твой умный бот 🤖\n\n"
+            "Вот что я умею:\n"
+            "🎨 Генерировать изображения\n"
+            "📄 Пересказывать файлы\n"
+            "🎙 Понимать голос\n"
+            "🤖 Отвечать на вопросы\n\n"
+            "Выбери нужную функцию кнопкой ниже:"
+        ),
+        reply_markup=markup
+    )
+
+
+@bot.message_handler(func=lambda message: message.text == "🎨 Создать изображение")
+def image_button(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, 'Отправьте описание изображения для генерации:')
+    bot.register_next_step_handler(message, handle_image)
+
+def handle_image(message):
+    chat_id = message.chat.id
+
+    estimated_time = random.randint(30, 60)  # имитация времени генерации
+
+    bot.send_message(chat_id, f"Работаю над вашей иллюстрацией, это может занять ~{estimated_time} сек")
+    bot.send_chat_action(chat_id, action='upload_photo')
+    start_time = time.time()
+
+    api = Painter()
+    try:
+        model_id = api.get_model()
+    except:
+        bot.send_message(chat_id, "Извините, бот временно недоступен.")
+    try:
+        u = api.generate(message.text, model_id)
+    except:
+        bot.send_message(chat_id, "Извините, бот временно недоступен.")
+    try:
+        images = api.check_generation(u)
+    except:
+        bot.send_message(chat_id, "Извините, бот временно недоступен.")
+
+    end_time = time.time()
+    gen_sec = int(end_time - start_time)
+
+    if images == 'CENSORED':
+        bot.send_message(chat_id, 'Изображение содержало в себе то, что может оскорбить других или нарушает законы РФ')
+    else:
+        uniq_id = str(uuid.uuid4())
+        image_path = f'images/{uniq_id}.png'
+
+        with open(image_path, 'wb') as fpng:
+            fpng.write(base64.b64decode(images[0]))
+        with open(image_path, 'rb') as fim:
+            bot.send_photo(chat_id, fim, caption=f"Изображение было создано за ~{gen_sec} сек")
+
 
 def save_docunent(message):
     file_name = message.document.file_name
@@ -66,89 +114,64 @@ def read_file(message):
     bot.send_message(message.chat.id, result)
 
 
-@bot.message_handler(commands=['read'])
-def get_file(message):
-    to_read = bot.send_message(message.chat.id, 'Пришли файл, я его прочитаю и перескажу!')
+@bot.message_handler(func=lambda message: message.text == "📄 Пересказать файл")
+def get_file_button(message):
+    to_read = bot.send_message(message.chat.id, "Пожалуйста, отправьте файл (TXT):")
     bot.register_next_step_handler(to_read, read_file)
 
-@bot.message_handler(commands=['image'])
-def image(message):
+
+@bot.message_handler(func=lambda message: message.text == "🎙 Спросить голосом")
+def voice_button(message):
     chat_id = message.chat.id
+    bot.send_message(message.chat.id, "Отправьте голосовое сообщение:🎙\n\nЧтобы выйти, напишите /stop")
+    user_mode[chat_id] = 'voice'
 
-    r = redis.Redis(host='localhost', port=6379)
-    try:
-        print(r.ping())  # Должно вывести True
-    except redis.ConnectionError:
-        print("Ошибка подключения к Redis")
-
-    start_time = round(time.time())
-    if r.get('gen_sec') == None:
-        r.set('gen_sec', 50)
-
-    prev_time = int(r.get('gen_sec').decode('UTF-8'))
-    prev_time = random.randint(prev_time - 10, prev_time + 10)
-
-    bot.send_message(chat_id, f"Работаю над вашей иллюстрацией, это может занять ~{prev_time} сек")
-    bot.send_chat_action(chat_id, action='upload_photo')
-
-    text_list = message.text.split()
-    del text_list[0]
-    text = ''.join(text_list)
-    api = Painter()
-    model_id = api.get_model()
-    u = api.generate(text, model_id)
-    images = api.check_generation(u)
-
-    if images == 'CENSORED':
-        bot.send_message(chat_id, 'Изображение содержало в себе то, что может оскорбить других или нарушает законы РФ')
-    else:
-        uniq_id = str(uuid.uuid4())
-        image_path = f'images/{uniq_id}.png'
-
-        end_time = round(time.time())
-        gen_sec = end_time - start_time
-        r.set('gen_sec', gen_sec)
-
-        with open(image_path, 'wb') as fpng:
-            fpng.write(base64.b64decode(images[0]))
-        with open(image_path, 'rb') as fim:
-            bot.send_photo(chat_id, fim, caption=f"Изображение было создано за ~{gen_sec} сек")
-
-
-@bot.message_handler(content_types=['text'])
-def reaction(message):
-    chat_id = message.chat.id
-    text = gpt_request(message.text)
-    bot.send_message(chat_id, text)
-
-
-
-@bot.message_handler(content_types=['photo'])
-def photo_reaction(message):
-    chat_id = message.chat.id
-    data = ["Классная фотка!",
-        "Хммм, прикольно..",
-        "Вау! Это фантастика!"]
-    random_msg = random.choice(data)
-    bot.send_message(chat_id, random_msg)
 
 @bot.message_handler(content_types=['voice'])
-def gpt_voice_question(message):
-    try:
-        file_info = bot.get_file(message.voice.file_id) # 1. Запрос к Telegram API для информации о файле
-        down_file = bot.download_file(file_info.file_path) # 2. Запрос к Telegram API для скачивания файла
-        path = f'audio/{uuid.uuid4()}.oga'
-        with open(path, 'wb') as file:
-            file.write(down_file)
+def handle_voice(message):
+    chat_id = message.chat.id
+    if user_mode.get(chat_id) == 'voice':
+        try:
+            file_info = bot.get_file(message.voice.file_id) # 1. Запрос к Telegram API для информации о файле
 
-        # Обрабатываем и получаем ответ
-        reply_audio_path = get_audio(path) # Здесь начинается основная обработка
+            down_file = bot.download_file(file_info.file_path) # 2. Запрос к Telegram API для скачивания файла
+            path = f'audio/{uuid.uuid4()}.oga'
+            with open(path, 'wb') as file:
+                file.write(down_file)
 
-        with open(reply_audio_path, 'rb') as audio_file:
-            bot.send_voice(message.chat.id, audio_file) # 3. Запрос к Telegram API для отправки файла
-    except Exception as e:
-        bot.reply_to(message, f"Ошибка обработки: {str(e)}")
+            # Обрабатываем и получаем ответ
+            reply_audio_path = get_audio(path) # Здесь начинается основная обработка
 
+            with open(reply_audio_path, 'rb') as audio_file:
+                bot.send_voice(message.chat.id, audio_file) # 3. Запрос к Telegram API для отправки файла
+        except Exception as e:
+            bot.reply_to(message, f"Ошибка обработки: {str(e)}")
+    else:
+        bot.send_message(message.chat.id, 'Нажмите /start, чтобы выбрать действие.')
+
+
+@bot.message_handler(func=lambda message: message.text == "🤖 Просто поговорить")
+def chat_button(message):
+    chat_id = message.chat.id
+    user_mode[chat_id] = 'chat'
+    bot.send_message(chat_id, "Просто напишите мне, и я отвечу 🤖\n\nЧтобы выйти, напишите /stop")
+
+@bot.message_handler(content_types=['text'])
+def handle_text(message):
+    chat_id = message.chat.id
+    if user_mode.get(chat_id) == 'chat':
+        # Пользователь в режиме чата
+        response = gpt_request(message.text)
+        bot.send_message(message.chat.id, response)
+    else:
+        bot.send_message(message.chat.id, 'Нажмите /start, чтобы выбрать действие.')
+
+
+@bot.message_handler(commands=['stop'])
+def stop_chat(message):
+    chat_id = message.chat.id
+    user_mode.pop(chat_id, None)
+    bot.send_message(chat_id, "Нажмите /start, чтобы выбрать действие.")
 
 print('Бот заработал!')
 

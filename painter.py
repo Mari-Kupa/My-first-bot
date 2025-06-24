@@ -13,34 +13,43 @@ class Painter:
         }
 
     def get_model(self):
-        response = requests.get(self.KEY_API_BASE_URL + 'key/api/v1/pipelines', headers=self.AUTH_HEADERS)
-        data = response.json()
-        return data[0]['id']
+        try:
+            response = requests.get(self.KEY_API_BASE_URL + 'key/api/v1/pipelines', headers=self.AUTH_HEADERS)
+            data = response.json()
+            return data[0]['id']
+        except Exception as e:
+            raise Exception(f"Ошибка получения модели: {str(e)}")
 
     def generate(self, prompt, model, images=1, width=1024, height=1024):
-        params = {
-            "type": "GENERATE",
-            "numImages": images,
-            "width": width,
-            "height": height,
-            "generateParams": {
-                "query": f"{prompt}"
+        try:
+            params = {
+                "type": "GENERATE",
+                "numImages": images,
+                "width": width,
+                "height": height,
+                "generateParams": {
+                    "query": f"{prompt}"
+                }
             }
-        }
 
-        data = {
-            'pipeline_id': (None, model),
-            'params': (None, json.dumps(params), 'application/json')
-        }
-        generate_url = f"{self.KEY_API_BASE_URL}key/api/v1/pipeline/run"
-        response = requests.post(generate_url, headers=self.AUTH_HEADERS, files=data)
-        data = response.json()
-        return data['uuid']
+            data = {
+                'pipeline_id': (None, model),
+                'params': (None, json.dumps(params), 'application/json')
+            }
+            generate_url = f"{self.KEY_API_BASE_URL}key/api/v1/pipeline/run"
+            response = requests.post(generate_url, headers=self.AUTH_HEADERS, files=data)
+            data = response.json()
+            return data['uuid']
+        except Exception as e:
+            raise Exception(f"Ошибка при генерации: {str(e)}")
 
     def check_generation(self, request_id, attempts=10, delay=10):
         while attempts > 0:
-            response = requests.get(self.KEY_API_BASE_URL + 'key/api/v1/pipeline/status/' + request_id, headers=self.AUTH_HEADERS)
-            data = response.json()
+            try:
+                response = requests.get(self.KEY_API_BASE_URL + 'key/api/v1/pipeline/status/' + request_id, headers=self.AUTH_HEADERS)
+                data = response.json()
+            except Exception as e:
+                raise Exception(f'Невозможно получить статус: {str(e)}')
             if data['status'] == 'DONE':
                 return data['result']['files']
             attempts -= 1
